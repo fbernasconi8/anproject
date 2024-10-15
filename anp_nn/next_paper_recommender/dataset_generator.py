@@ -62,7 +62,7 @@ author_citing_paper_df = pd.merge(
     writes_df,
     papers_df[['id', 'citations', 'year']],
     left_on='paper_id',
-    right_on='id'
+    right_on='id' 
 )
 
 # Rinomina le colonne per uniformità

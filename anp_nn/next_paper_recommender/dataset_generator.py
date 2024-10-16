@@ -74,7 +74,7 @@ author_citing_paper_df.rename(columns={
 }, inplace=True)
 
 author_citing_paper_df.drop(columns=['paper_id'], inplace=True)
-#################################################################################################
+##################################################################################################
 
 # Salva il file your_dataset_name.inter
 data_path = '/home/francesca/academic_network_project/anp_nn/anp_data/data_path'  

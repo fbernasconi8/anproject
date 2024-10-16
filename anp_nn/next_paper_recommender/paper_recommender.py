@@ -90,7 +90,7 @@ user_ids_to_predict = user_ids[:num_users_to_predict]
 
 # Parametri per il batch processing
 batch_size = 10  # Scegli un batch_size che il tuo sistema può gestire
-top_n = 10       # Numero di raccomandazioni da generare per ogni utente
+top_n = 10       # numero di raccomandazioni per utente
 num_items = len(item_ids)
 
 all_user_ids = []

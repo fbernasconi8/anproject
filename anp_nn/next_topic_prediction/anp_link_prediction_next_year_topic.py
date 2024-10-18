@@ -15,19 +15,18 @@ from torch_geometric.nn import SAGEConv, to_hetero
 from torch_geometric.utils import coalesce
 from tqdm import tqdm
 
-# Constants
 BATCH_SIZE = 4096
 YEAR = 2019
 ROOT = "../anp_data"
 DEVICE = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
-# Get command line arguments
+
 learning_rate = float(sys.argv[1])
 use_infosphere = sys.argv[2].lower() == 'true'
 infosphere_number = int(sys.argv[3])
 only_new = sys.argv[4].lower() == 'true'
 
-# Current timestamp for model saving
+
 current_date = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 PATH = f"../anp_models/{os.path.basename(sys.argv[0][:-3])}_{current_date}/"
 os.makedirs(PATH)
@@ -35,17 +34,17 @@ with open(PATH + 'info.json', 'w') as json_file:
     json.dump({'lr': learning_rate, 'use_infosphere': use_infosphere, 'infosphere_expansion': infosphere_number,
                'only_new': only_new, 'data': []}, json_file)
 
-# Create ANP dataset
+#ANP dataset creation
 dataset = ANPDataset(root=ROOT)
 data = dataset[0]
 
-# Add infosphere data if requested
+#add infosphere (if requested)
 if use_infosphere:
     fold = [0, 1, 2, 3, 4]
     fold_string = '_'.join(map(str, fold))
     name_infosphere = f"{infosphere_number}_infosphere_{fold_string}_{YEAR}_noisy.pt"
 
-    # Load infosphere
+    #load infosphere
     if os.path.exists(f"{ROOT}/computed_infosphere/{YEAR}/{name_infosphere}"):
         infosphere_edges = torch.load(f"{ROOT}/computed_infosphere/{YEAR}/{name_infosphere}")
         data['paper', 'infosphere_cites', 'paper'].edge_index = coalesce(infosphere_edges[CITES])
@@ -57,13 +56,13 @@ if use_infosphere:
     else:
         raise Exception(f"{name_infosphere} not found!")
 
-# Predict future topics of an author
+#predict future author topics
 topic_function = generate_difference_next_topic_edge_year if only_new else generate_next_topic_edge_year
 topic_year = YEAR if only_new else YEAR + 1
 topic_file = f"{ROOT}/processed/future_topics{topic_year}.pt" if only_new \
     else f"{ROOT}/processed/all_topics{topic_year}.pt"
 
-# Use existing topic edge if available, else generate
+#topic edge (if exists)
 if os.path.exists(topic_file):
     print("Topic edge found!")
     data['author', 'writes_about', 'topic'].edge_index = torch.load(topic_file)
@@ -74,12 +73,12 @@ else:
     data['author', 'writes_about', 'topic'].edge_label = None
     torch.save(data['author', 'writes_about', 'topic'].edge_index, topic_file)
 
-# Convert paper features to float and make the graph undirected
+
 data['paper'].x = data['paper'].x.to(torch.float)
 data = T.ToUndirected()(data)
 data = data.to('cpu')
 
-# Training Data
+#training
 sub_graph_train, _, _, _ = anp_filter_data(data, root=ROOT, folds=[0, 1, 2, 3], max_year=YEAR, keep_edges=False)
 transform_train = T.RandomLinkSplit(
     num_val=0,
@@ -90,7 +89,7 @@ transform_train = T.RandomLinkSplit(
 )
 train_data, _, _ = transform_train(sub_graph_train)
 
-# Validation Data
+#validation
 sub_graph_val = anp_simple_filter_data(data, root=ROOT, folds=[4], max_year=YEAR)
 transform_val = T.RandomLinkSplit(
     num_val=0,
@@ -101,13 +100,13 @@ transform_val = T.RandomLinkSplit(
 )
 val_data, _, _ = transform_val(sub_graph_val)
 
-# Define seed edges:
+#seed edges
 edge_label_index = train_data['author', 'writes_about', 'topic'].edge_label_index
 edge_label = train_data['author', 'writes_about', 'topic'].edge_label
 train_loader = LinkNeighborLoader(
     data=train_data,
-    # [250, 50] aumento gli edge
-    num_neighbors=[20, 10], ### 
+    # [250, 50] aumento edge
+    num_neighbors=[20, 10], 
     #num_neighbors=[250, 50],
     edge_label_index=(('author', 'writes_about', 'topic'), edge_label_index),
     edge_label=edge_label,
@@ -119,7 +118,7 @@ edge_label_index = val_data['author', 'writes_about', 'topic'].edge_label_index
 edge_label = val_data['author', 'writes_about', 'topic'].edge_label
 val_loader = LinkNeighborLoader(
     data=val_data,
-    num_neighbors=[20, 10], ###
+    num_neighbors=[20, 10],
     #num_neighbors=[250, 50],
     edge_label_index=(('author', 'writes_about', 'topic'), edge_label_index),
     edge_label=edge_label,
@@ -127,11 +126,11 @@ val_loader = LinkNeighborLoader(
     shuffle=False,
 )
 
-# Delete the writes_about edge (data will be used for data.metadata())
+
 del data['author', 'writes_about', 'topic']
 
 
-# Define model components
+
 class GNNEncoder(torch.nn.Module):
     def __init__(self, hidden_channels, out_channels):
         super().__init__()
@@ -139,7 +138,7 @@ class GNNEncoder(torch.nn.Module):
         self.conv2 = SAGEConv((-1, -1), out_channels)
         self.conv3 = SAGEConv((-1, -1), out_channels)
         self.conv4 = SAGEConv((-1, -1), out_channels)
-        #self.dropout = Dropout(p=0.5) #aggiunta di Dropout
+        #self.dropout = Dropout(p=0.5) 
 
     def forward(self, x, edge_index):
         x = self.conv1(x, edge_index).relu()
@@ -178,14 +177,13 @@ class Model(torch.nn.Module):
         return self.decoder(z_dict, edge_label_index)
 
 
-# Initialize model, optimizer, and embeddings
 model = Model(hidden_channels=32).to(DEVICE)
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate) #aggiungo weight decay nella parentesi -> weight_decay = 0.01
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate) #weight_decay = 0.01
 embedding_author = torch.nn.Embedding(data["author"].num_nodes, 32).to(DEVICE)
 embedding_topic = torch.nn.Embedding(data["topic"].num_nodes, 32).to(DEVICE)
 
 
-# Training and Testing Functions
+#trining and testing
 def train():
     model.train()
     total_examples = total_correct = total_loss = 0
@@ -195,7 +193,6 @@ def train():
         edge_label = batch['author', 'topic'].edge_label
         del batch['author', 'writes_about', 'topic']
 
-        # Add node embeddings for message passing
         batch['author'].x = embedding_author(batch['author'].n_id)
         batch['topic'].x = embedding_topic(batch['topic'].n_id)
 
@@ -209,7 +206,6 @@ def train():
         total_loss += float(loss) * pred.numel()
         total_examples += pred.numel()
 
-        # Calculate accuracy
         pred = pred.clamp(min=0, max=1)
         total_correct += int((torch.round(pred, decimals=0) == target).sum())
 
@@ -226,7 +222,7 @@ def test(loader):
         edge_label = batch['author', 'topic'].edge_label
         del batch['author', 'writes_about', 'topic']
 
-        # Add node embeddings for message passing
+        #node embeddings
         batch['author'].x = embedding_author(batch['author'].n_id)
         batch['topic'].x = embedding_topic(batch['topic'].n_id)
 
@@ -237,11 +233,11 @@ def test(loader):
         total_loss += float(loss) * pred.numel()
         total_examples += pred.numel()
 
-        # Calculate accuracy
+        #accuracy
         pred = pred.clamp(min=0, max=1)
         total_correct += int((torch.round(pred, decimals=0) == target).sum())
 
-        # Confusion matrix
+        #confusion matrix
         for i in range(len(target)):
             if target[i].item() == 0:
                 if torch.round(pred, decimals=0)[i].item() == 0:
@@ -257,7 +253,6 @@ def test(loader):
     return total_correct / total_examples, total_loss / total_examples
 
 
-# Main Training Loop
 training_loss_list = []
 validation_loss_list = []
 training_accuracy_list = []
@@ -267,21 +262,19 @@ best_val_loss = np.inf
 patience = 5
 counter = 0
 
-# Training Loop
 for epoch in range(1, 500):
     train_acc, train_loss = train()
     confusion_matrix = {'tp': 0, 'fp': 0, 'fn': 0, 'tn': 0}
     val_acc, val_loss = test(val_loader)
 
-    # Save the model if validation loss improves
     if val_loss < best_val_loss:
         best_val_loss = val_loss
         anp_save(model, PATH, epoch, train_loss, val_loss, val_acc)
-        counter = 0  # Reset the counter if validation loss improves
+        counter = 0 
     else:
         counter += 1
 
-    # Early stopping check
+    #early stopping
     if counter >= patience:
         print(f'Early stopping at epoch {epoch}.')
         break
@@ -291,7 +284,6 @@ for epoch in range(1, 500):
     training_accuracy_list.append(train_acc)
     validation_accuracy_list.append(val_acc)
 
-    # Print epoch results
     print(f'Epoch: {epoch:02d}, Loss: {train_loss:.4f} - {val_loss:.4f}, Accuracy: {val_acc:.4f}')
 
 generate_graph(PATH, training_loss_list, validation_loss_list, training_accuracy_list, validation_accuracy_list,

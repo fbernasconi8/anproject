@@ -1,9 +1,8 @@
-# dataset_generation.py
 
 import pandas as pd
 import os
 
-# Specifica il percorso dei tuoi file CSV
+#CSV file path
 about_csv = '/home/francesca/academic_network_project/anp_data/raw/about.csv'
 cites_csv = '/home/francesca/academic_network_project/anp_data/raw/cites.csv'
 papers_csv = '/home/francesca/academic_network_project/anp_data/raw/papers.csv'
@@ -12,7 +11,6 @@ authors_topic_2019_csv = '/home/francesca/academic_network_project/anp_data/raw/
 papers_about_csv = '/home/francesca/academic_network_project/anp_data/raw/sorted_papers_about.csv'
 writes_csv = '/home/francesca/academic_network_project/anp_data/raw/writes.csv'
 
-# Leggi i file CSV
 about_df = pd.read_csv(about_csv)
 cites_df = pd.read_csv(cites_csv)
 papers_df = pd.read_csv(papers_csv)
@@ -21,7 +19,7 @@ authors_topic_2019_df = pd.read_csv(authors_topic_2019_csv)
 papers_about_df = pd.read_csv(papers_about_csv)
 writes_df = pd.read_csv(writes_csv)
 
-# Leggi gli ID degli autori dai 5 file CSV (se disponibili)
+#authors ID from 5 CSV files (if available)
 csv_folder_path = '/home/francesca/academic_network_project/anp_data/split'
 author_ids_dfs = []
 column_names = ['author_id']
@@ -35,28 +33,25 @@ for i in range(0, 5):
     else:
         print(f"File {filepath} non esiste.")
 
-# Combina tutti gli ID degli autori
 if author_ids_dfs:
     author_ids_df = pd.concat(author_ids_dfs, ignore_index=True)
     all_author_ids = set(author_ids_df['author_id'].unique())
 else:
     print("non sono stati salvati correttamente gli autori")
 
-# Raccogli tutti gli ID unici
 all_author_ids = all_author_ids | set(writes_df['author_id'].unique())
 
-# Funzione per convertire 'topic_id' in interi e rimuovere NaN
+#'topic_id' in int, remove NaN
 def ensure_int_topic_id(df, column='topic_id'):
     df[column] = pd.to_numeric(df[column], errors='coerce')
     df.dropna(subset=[column], inplace=True)
     df[column] = df[column].astype(int)
 
-# Applica la funzione ai tuoi DataFrame
 ensure_int_topic_id(about_df)
 ensure_int_topic_id(authors_topic_2019_df)
 ensure_int_topic_id(papers_about_df)
 
-#################################################################################################
+#####
 
 author_citing_paper_df = pd.merge(
     writes_df,
@@ -65,7 +60,6 @@ author_citing_paper_df = pd.merge(
     right_on='id' 
 )
 
-# Rinomina le colonne per uniformità
 author_citing_paper_df.rename(columns={
     'author_id': 'user_id',
     'id': 'item_id',
@@ -74,9 +68,10 @@ author_citing_paper_df.rename(columns={
 }, inplace=True)
 
 author_citing_paper_df.drop(columns=['paper_id'], inplace=True)
-##################################################################################################
 
-# Salva il file your_dataset_name.inter
+#####
+
+#save .inter
 data_path = '/home/francesca/academic_network_project/anp_nn/anp_data/data_path'  
 if not os.path.exists(data_path):
     os.makedirs(data_path)
@@ -89,13 +84,11 @@ csv_inter_path = '/home/francesca/academic_network_project/anp_nn/anp_data/data_
 
 interactions = pd.read_csv(csv_inter_path)
 
-# Assicurati che i tipi di dati siano corretti per il formato .inter
 interactions['user_id'] = interactions['user_id'].astype(int)
 interactions['item_id'] = interactions['item_id'].astype(int)
 interactions['paper_citations'] = interactions['paper_citations'].astype(int)
 interactions['paper_year'] = interactions['paper_year'].astype(int)
 
-# Definisci i tipi di campo per il file .inter
 inter_field_types = {
     'user_id': 'token',
     'item_id': 'token',
@@ -103,10 +96,9 @@ inter_field_types = {
     'paper_year': 'float'
 }
 
-# Crea l'header per il file .inter usando le colonne corrette
 header_line = '\t'.join([f"{col}:{inter_field_types[col]}" for col in interactions.columns])
 
-# Salva il file .inter
+#save
 inter_path = '/home/francesca/academic_network_project/anp_nn/anp_data/data_path/academic_dataset/academic_dataset.inter'
 with open(inter_path, 'w') as f:
     f.write(header_line + '\n')
@@ -114,21 +106,17 @@ with open(inter_path, 'w') as f:
 
 print("Conversione .inter completata.")
 
-#################################################################################################
-
 #####   DATASET.USER
 
-# Numero di articoli scritti da ogni autore
 author_paper_counts = writes_df.groupby('author_id').size().reset_index(name='num_papers')
 
-# Rinomina la colonna 'author_id' in 'user_id' per uniformità con il formato richiesto
 author_paper_counts.rename(columns={'author_id': 'user_id'}, inplace=True)
 
-# Salva il file your_dataset_name.user
+#save .user
 author_paper_counts.to_csv(os.path.join(data_path, 'academic_dataset_user.csv'), index=False)
 print("academic_dataset_user.csv creato correttamente.")
 
-#################################################################################################
+#####
 
 print("inizio conversione .csv to .user")
 
@@ -153,24 +141,19 @@ with open(user_path, 'w') as f:
 
 print("Conversion .user completata.")
 
-#################################################################################################
+##### DATASET.ITEM
 
-### DATASET.ITEM
-
-# Estrai le citazioni e l'anno dal file papers.csv
 paper_citations = papers_df[['id', 'citations', 'year']].copy()
 
-# Rinomina le colonne per adattarsi al formato richiesto
 paper_citations.rename(columns={'id': 'item_id', 'citations': 'num_citations'}, inplace=True)
 
-# Gestisci eventuali valori mancanti, se presenti
 paper_citations.fillna(0, inplace=True)
 
-# Salva il file your_dataset_name.item
+#save.item
 paper_citations.to_csv(os.path.join(data_path, 'academic_dataset_item.csv'), index=False)
 print("academic_dataset.item creato correttamente.")
 
-#################################################################################################
+#####
 
 print("inizio conversione .csv to .item")
 

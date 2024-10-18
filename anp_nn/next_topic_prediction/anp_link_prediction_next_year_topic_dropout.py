@@ -19,7 +19,7 @@ from tqdm import tqdm
 BATCH_SIZE = 4096
 YEAR = 2019
 ROOT = "../anp_data"
-DEVICE = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # Get command line arguments
 learning_rate = float(sys.argv[1])
